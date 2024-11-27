@@ -1,6 +1,7 @@
 /* Arquivo com acesso direto via hashing */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #define N 57
 typedef struct carro {
 	char placa[8];
@@ -30,39 +31,9 @@ void inserirTabelaHash(No* tabelaHashing[], char placa[], int pos);
 int hashing(char placa[]);
 void exibirOpcoes();
 
-int main() {
-	char nome_Arquivo[] = "carros.dat";
-	int op;
-	FILE* arquivo;
-	No* tabelaHashing[N];
-	arquivo = prepararArquivo(nome_Arquivo);
-	if (arquivo == NULL)
-		printf("Erro na abertura do arquivo. Programa encerrado \n");
-	else {
-		criarIndice(arquivo, tabelaHashing);
-		do {
-			exibirOpcoes();
-			scanf("%d",&op); fflush(stdin);
-			switch (op) {
-			case 1: cadastrar(arquivo, tabelaHashing);
-		                              break;
-			case 2: consultar(arquivo, tabelaHashing);
-			             break;
-			case 3: alterar(arquivo, tabelaHashing);
-			             break;
-			case 4: remover(arquivo, tabelaHashing);
-			             break;
-			case 5: exibirCadastro(arquivo);
-			             break;
-			case 0: liberarArquivo(arquivo);
-			             desalocarIndice(tabelaHashing);
-			             break;
-			default: printf("Opcao invalida \n");
-			}
-		} while (op != 0);
-	}
-	return 0;
-}
+
+
+
 
 FILE* prepararArquivo(char nome[]) {
     FILE *arq;
@@ -71,9 +42,6 @@ FILE* prepararArquivo(char nome[]) {
         arq = fopen(nome,"w+b");
     }
     return arq; 
-     /* Tenta abrir o arquivo para leitura e gravação.
-      * Caso não consiga abrir o arquivo, tenta criá-lo para leitura e gravação.
-      */ 
 }
 void inicializarTabaleHash(No * Tabelahash[]){
 	for( int i = 0 ;i < N;i++){
@@ -81,12 +49,15 @@ void inicializarTabaleHash(No * Tabelahash[]){
 	}
 }
 
+//Basicamente essa funcionalidade criar uma arquivo binario temporario onde vão ficar apenas os carros com status ativo
+//fseek(arq, 0, SEEK_SET) reposiciona o ponteiro que serve tanto para escrever como para ler o arquivo para o inicio
+//fread(&car, sizeof(CARRO), 1, arq) lê um registro do tipo CARRO que é uma struct e se o status do carro for 1 ele escreve no arqtemp
+//remove o arquivo antigo original descantando e depois modifica o arqTemp para o mesmo nome do arquivo que foi apagado para nesse arquivo so ter carros com status ativo
 
 void liberarArquivo(FILE* arq) {
 	
     FILE* arqTemp;
     CARRO car;
-    int retorno;
     arqTemp = fopen("temp.dat", "w+b");
     if (arqTemp == NULL) {
         printf("Erro ao tentar criar o arquivo temporário \n");
@@ -111,45 +82,46 @@ void liberarArquivo(FILE* arq) {
         fclose(arq);
     }
 }
-	/* Apagar, fisicamente, os registros que foram deletados logicamente e fechar o arquivo.
-	*      1.1 - Criar um arquivo novo (vazio).
-	*      1.2 - Copiar todos os registros de STATUS igual a 1 do arquivo de carros para o arquivo novo.
-	*      1.3 - Fechar os dois arquivos.
-	*      1.4 - Remover o arquivo de carros ("carros.dat").
-	*      1.5 - Renomear o arquivo novo com o nome "carros.dat".
-	*/
-}
 
 void criarIndice(FILE* arq, No* tabelaHashing[]) {
-	/* Preencher a tabela de hashing com as chaves dos registros que estão armazenados no arquivo
-	       1.1 - Ler o arquivo registro a registro até o final.
-	       1.2 - Para cada registro lido, aplicar a função de hashing à chave (ou seja, a placa).
-	       1.3 - O resultado da função indica a posição na tabela onde a chave será inserida.
-	       1.4 - Criar nó, preencher com a chave e a posição dela no arquivo e inserir na tabela, 
-	                na lista encadeada correspondente, de forma que a lista permaneça ordenada 
-                                 por ordem crescente de placa.
-	*/
+	
+	int retorno;
+	int cont=-1;
+    CARRO car;
+    fseek(arq, 0, SEEK_SET);
+    do{
+        retorno = fread(&car, sizeof(CARRO), 1, arq);
+        if (retorno == 1) {
+           cont++;
+           inserirTabelaHash(tabelaHashing,car.placa,cont);  
+        }
+        
+    } while (!feof(arq));
 }
-
+// Resetar toda tabela hash 
 void desalocarIndice(No* tabelaHashing[]) {
-	/* Desalocar os nós que compõem as listas da tabela de hashing.
-	*/
+	int i;
+    No *aux1,*aux2;
+    for(i=0;i<N;i++){
+        if(tabelaHashing[i]!= NULL){
+            aux1 = tabelaHashing[i];
+            while(aux1 != NULL){
+                aux2 = aux1;
+                aux1 = aux1->prox;
+                free(aux2);
+            }
+            tabelaHashing[i] = NULL;
+        }
+    }
+	
+	
 }
 
-void exibirOpcoes() {
-	printf("Opções \n");
-	printf("1 - Cadastrar um carro \n");
-	printf("2 - Consultar carro \n");
-	printf("3 - Alterar dados do carro \n");
-	printf("4 - Remover carro \n");
-	printf("5 - Exibir carros cadastrados \n");
-	printf("0 - Encerrar programa \n");
-	printf("Informe a opcao: ");
-}
+
 
 int buscar(No* tabelaHashing[], char placa[]) {
 	No *aux;
-	int retorno = hashing_Chave(placa);
+	int retorno = hashing(placa);
 	if(tabelaHashing[retorno]==NULL){
 		return -1;
 	}
@@ -161,7 +133,7 @@ int buscar(No* tabelaHashing[], char placa[]) {
 		}
 		else {
 			aux = tabelaHashing[retorno];
-			while(aux!=NULL){
+			while(aux->prox != NULL){
 				if(strcmp(aux->placa,placa)==0){
 					return aux->posicao;
 				}
@@ -174,18 +146,22 @@ int buscar(No* tabelaHashing[], char placa[]) {
 			}
 		}
 	}
-	
-	/* Procurar na tabela de hashing a placa desejada e retornar a posição da placa no arquivo.
-	   1 - Aplicar a função de hashing na chave (ou seja, na placa).
-	   2 - Procurar a chave na lista indicada pelo resultado da função (usar busca sequencial melhorada).
-	   3 - Caso encontre, retornar a posição da chave no arquivo.
-	   4 - Caso não encontre, retornar -1 
-                 */
+}
+
+int hashing(char placa[]){
+    int i;
+    int soma=0;
+    int tam =strlen(placa);
+    for(i= 0 ; i<tam ; i++){
+        soma = (soma + placa[i]) <<  (i % 8);
+        //soma+=(placa[i] << (i%8) );
+    }
+    return abs(soma) % N; 
 }
 
 No * CriarNo(char placa[], int pos){
 	No* novo;
-	novo=(No*)malloc(sizeof(No*));
+	novo=(No*)malloc(sizeof(No));
 	novo->ant= NULL;
 	novo->prox= NULL;
 	novo->posicao= pos;
@@ -234,15 +210,6 @@ void inserirTabelaHash(No* tabelaHashing[], char placa[], int pos) {
 		}
 
 	}
-	
-	/* Inserir na tabela hashing, na lista encadeada indicada pela função de hashing, 
-	* uma chave e sua posição no arquivo.
-	* 1 - Aplicar a função de hashing à chave (ou seja, a placa).
-	* 2 - O resultado da função indica a posição na tabela onde a chave será inserida.
-	* 3 - Criar nó, preencher com a chave e a posição dela no arquivo e inserir na tabela, 
-	* na lista encadeada correspondente, de forma que a lista permaneça ordenada 
-                 * por ordem crescente de placa.
-	*/
 }
 
 void removerTabelaHash(No* tabelaHashing[], char placa[], int posTabela) {
@@ -269,80 +236,193 @@ void removerTabelaHash(No* tabelaHashing[], char placa[], int posTabela) {
 			free(aux);
 		
 		}
-	/* Remover da tabela de hashing o nó que contem a placa passada como parâmetro. 
-	* Recebe como parâmetro também a posição na tabela onde a chave se encontra.
-	*/
+
 	}
 }
 
 	
 
 
-int hashing_Chave(char placa[]){
-    int i;
-    int soma=0;
-    int tam =strlen(placa);
-    for(i= 0 ; i<tam ; i++){
-        soma = soma +placa[i] <<  (i % 8);
-        //soma+=(placa[i] << (i%8) );
-    }
-    return abs(soma) % N; 
 
-    // regra  pra placas como BAc, ou bac, cab ficarei no mesmo lugar;
-    // DUvida na permutção alfa numericas
 
-	/* A função “hashing” recebe com parâmetro a chave (ou seja, a placa) e 
-	* retorna o valor calculado segundo o método da permutação para chaves alfanuméricas 
-	* (visto em sala).
-	*/
-}
+//fseek posiciona o ponteiro no final do arquivo, pronto para adicionar o novo registro.
+//ftell calcula o índice do novo registro no arquivo ,Retorna a posição atual do ponteiro no arquivo (em bytes). Dividindo pelo tamanho de um registro sizeof(CARRO)
+//fwrite grava o registro no final do arquivo.
+//fflush força a escrita imediata dos dados que estão no buffer para o arquivo 
+//Essa função é utilizada para adicionar um novo carro ao arquivo binário e registrar sua localização em uma tabela de hashing
 
 void cadastrar(FILE* arq, No* tabelaHashing[]) {
-	CARRO carro;
-	int retorno
 	
-	/* Cadastrar o registro do carro no arquivo e inserir a chave (placa) na tabela de hashing.
-	* 1 - Solicita a placa do carro a ser cadastrado.
-	* 2 - Procura pela placa na tabela de hashing.
-	* 3 - Caso encontre, informa que o carro já está no cadastro.
-	* 4 - Caso não encontre, solicita os demais dados do carro, o insere no final do arquivo.
-	* 5 - Insere a chave, juntamente com sua posição no arquivo, na tabela de hashing.
-	*     Utilize para isso o procedimento "inserirTabelaHash".
-	*/
+	CARRO car;
+    int retorno;
+	int posicao,posicao_no_Arq;
+    printf("Informe Placa: ");
+    scanf("%s",car.placa);
+    posicao = buscar(tabelaHashing, car.placa);
+    if (posicao != -1) {
+        printf("Carro ja cadastrado\n");
+    }
+    else {
+
+        printf("Informe Marca: ");
+        scanf("%s",car.marca);
+        printf("Informe Modelo: ");
+        scanf("%s",car.modelo);
+        printf("Informe cor: ");
+        scanf("%s",car.cor);
+        car.status = 1;
+        fseek(arq, 0, SEEK_END);
+        posicao_no_Arq = ftell(arq) / sizeof(CARRO);
+        retorno = fwrite(&car, sizeof(CARRO), 1, arq);
+        if (retorno == 1) {
+            fflush(arq);
+            printf("Carro cadastrado com sucesso\n");
+            inserirTabelaHash(tabelaHashing, car.placa,posicao_no_Arq);
+        }
+        else {
+            printf("Erro na gravação\n");
+
+        }
+    }
 }
 
+
 void consultar(FILE* arq, No* tabelaHashing[]) {
-	/* Consultar o registro do carro no arquivo
-                  * 1 - Solicita a placa do carro a ser consultado.
-                  * 2 - Procura pela placa na tabela de hashing.
-                  * 3 - Caso não encontre, informa que o carro não está no cadastro.
-                  * 4 - Caso encontre, vai ao arquivo, na posição indicada, 
-	 *     lê o registro do carro e exibe seus dados.
-                  */
+	CARRO car;
+    int retorno, posicao;
+    printf("Informe Placa a ser consultada: ");
+    scanf("%s",car.placa);
+    posicao = buscar(tabelaHashing, car.placa);
+    if (posicao == -1) {
+        printf("Carro nao cadastrado\n");
+    }
+    else {
+        fseek(arq, posicao * sizeof(CARRO), SEEK_SET);
+        retorno = fread(&car, sizeof(CARRO), 1, arq);
+        if (retorno == 1) {
+            printf("Placa : %s\n", car.placa);
+            printf("Marca: %s\n", car.marca);
+            printf("Modelo: %s\n", car.modelo);
+            printf("Modelo: %s\n", car.cor);
+        }
+        else {
+            printf("Erro de leitura\n");
+        }
+    }
 }
 
 void alterar(FILE* arq, No* tabelaHashing[]) {
-	/* Alterar o registro do carro no arquivo.
-	 * 1 - Solicita a placa do carro a ser alterado.
-	 * 2 - Procura pela placa na tabela de hashing.
-	 * 3 - Caso não encontre, informa que o carro não está no cadastro.
-	 * 4 - Caso encontre, vai ao arquivo, na posição indicada, lê o registro do carro e 
-                         exibe seus dados.
-	 * 5 - Pergunta ao usuário quais dados deseja alterar. Efetiva a alteração dos dados no arquivo.
-	*/
+	CARRO car;
+    int retorno, posicao, op;
+    printf("Informe Placa a ser consultada: ");
+    scanf("%s",car.placa);
+    posicao = buscar(tabelaHashing, car.placa);
+
+    if (posicao == -1) {
+        printf("Carro nao cadastrado\n");
+    }
+    else {
+        fseek(arq, posicao * sizeof(CARRO), SEEK_SET);
+        retorno = fread(&car, sizeof(CARRO), 1, arq);
+        if (retorno == 1) {
+            printf("Voce deseja:\n ");
+            printf("1. Alterar Marca\n ");
+            printf("2. Alterar Modelo\n ");
+            printf("3. Alterar cor\n ");
+            scanf("%d",&op);
+            switch (op){
+                case 1: printf("Informe a nova marca: ");
+                scanf("%s", &car.marca);
+                fseek(arq, -sizeof(CARRO), SEEK_CUR);
+                retorno = fwrite(&car, sizeof(CARRO), 1, arq);
+                if (retorno == 1) {
+                    printf("Alterecao realizada com sucesso\n");
+
+                }
+                else {
+                    printf("Erro de gravacao\n");
+                }
+                break;
+                case 2:printf("Informe a novo modelo: ");
+                scanf(" %s", &car.modelo);
+                fseek(arq, -sizeof(CARRO), SEEK_CUR);
+                retorno = fwrite(&car, sizeof(CARRO), 1, arq);
+                if (retorno == 1) {
+                    printf("Alterecao realizada com sucesso\n");
+
+                }
+                else {
+                    printf("Erro de gravacao\n");
+                }
+                break;
+                case 3:printf("Informe a nova cor: ");
+                scanf(" %s", &car.cor);
+                fseek(arq, -sizeof(CARRO), SEEK_CUR);
+                retorno = fwrite(&car, sizeof(CARRO), 1, arq);
+                if (retorno == 1) {
+                    printf("Alterecao realizada com sucesso\n");
+
+                }
+                else {
+                    printf("Erro de gravacao\n");
+                }
+                break;
+                default: printf("Opção inválida! \n");
+            }
+        }
+        else {
+            printf("Erro de leitura\n");
+        }
+    }
 }
 
 void remover(FILE* arq, No* tabelaHashing[]) {
-	/* Remover o registro do carro do arquivo
-	 * 1 - Solicita a placa do carro a ser removido.
-	 * 2 - Procura pela placa na tabela de hashing.
-	 * 3 - Caso não encontre, informa que o carro não está no cadastro.
-	 * 4 - Caso encontre, vai ao arquivo, na posição indicada, lê o registro do carro e exibe seus dados.
-	 * 5 - Pergunta ao usuário se deseja realmente removê-lo. Efetiva a remoção que consiste 
-                         em alterando no arquivo o STATUS do registro do carro para 0 (removido).
-	 * 5 - Remove o nó que contém a chave, juntamente com sua posição no arquivo, 
-                          da tabela de hashing. Utilize para isso o procedimento "removerTabelaHash".
-	*/
+	CARRO car;
+    int retorno, posicao,op;
+    printf("Informe Placa a ser consultada: ");
+    scanf("%s",car.placa);
+    posicao = buscar(tabelaHashing, car.placa);
+    if (posicao == -1) {
+        printf("Carro nao cadastrado\n");
+    }
+    else {
+        fseek(arq, posicao * sizeof(CARRO), SEEK_SET);
+        retorno = fread(&car, sizeof(CARRO), 1, arq);
+        if (retorno == 1) {
+            printf("Placa : %s\n", car.placa);
+            printf("Marca: %s\n", car.marca);
+            printf("Modelo: %s\n", car.modelo);
+            printf("Modelo: %s\n", car.cor);
+            printf("Voce tem certeza que deseja remover? \n");
+            printf("1. SIM\n");
+            printf("2. NAO\n");
+            scanf("%d",&op);
+            switch (op){
+            case 1: car.status = 0;
+            
+            fseek(arq, -sizeof(CARRO), SEEK_CUR);
+            retorno = fwrite(&car, sizeof(CARRO), 1, arq);
+            if (retorno == 1) {
+                printf("Remocao realizada com sucesso\n");
+                removerTabelaHash(tabelaHashing,car.placa,hashing(car.placa));
+            }
+            else {
+                printf("Erro de gravacao\n");
+
+            }
+                break;
+            case 2: printf("Operacao cancelada\n");
+                break;
+                
+            default: printf("Opção inválida! \n");
+            
+                break;
+            }
+        }
+        else {
+            printf("Erro de leitura\n");
+        }
+    }
 }
 
 void exibirCadastro(FILE* arq) {
@@ -364,3 +444,56 @@ void exibirCadastro(FILE* arq) {
     } while (!feof(arq));
 	
 }
+
+void exibirOpcoes() {
+	printf("Opções \n");
+	printf("1 - Cadastrar um carro \n");
+	printf("2 - Consultar carro \n");
+	printf("3 - Alterar dados do carro \n");
+	printf("4 - Remover carro \n");
+	printf("5 - Exibir carros cadastrados \n");
+	printf("0 - Encerrar programa \n");
+	printf("Informe a opcao: ");
+}
+
+int main() {
+	char nome_Arquivo[] = "carros.dat";
+	int op;
+	FILE* arquivo;
+	No* tabelaHashing[N];
+    inicializarTabaleHash(tabelaHashing);
+	arquivo = prepararArquivo(nome_Arquivo);
+	if (arquivo == NULL)
+		printf("Erro na abertura do arquivo. Programa encerrado \n");
+	else {
+		criarIndice(arquivo, tabelaHashing);
+		do {
+			exibirOpcoes();
+			scanf("%d",&op); fflush(stdin);
+			switch (op) {
+			case 1: 
+				cadastrar(arquivo, tabelaHashing);
+		        break;
+			case 2: 
+				consultar(arquivo, tabelaHashing);
+			    break;
+			case 3: 
+				alterar(arquivo, tabelaHashing);
+			    break;
+			case 4: 
+				remover(arquivo, tabelaHashing);
+			    break;
+			case 5: 
+				exibirCadastro(arquivo);
+			    break;
+			case 0: 	
+				liberarArquivo(arquivo);
+			    desalocarIndice(tabelaHashing);
+			    break;
+			default: printf("Opcao invalida \n");
+			}
+		} while (op != 0);
+	}
+	return 0;
+}
+
