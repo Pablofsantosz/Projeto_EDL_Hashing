@@ -130,7 +130,7 @@ int buscar(No* tabelaHashing[], char placa[]) {
 		}
 		else {
 			aux = tabelaHashing[retorno];
-			while(aux->prox != NULL){
+			while(aux != NULL){
 				if(strcmp(aux->placa,placa)==0){
 					return aux->posicao;
 				}
